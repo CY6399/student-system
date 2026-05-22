@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 课程排课</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === 'schedule' }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="header">
+                <span class="header-left">课程排课</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <main class="content">
+                <div class="page-container">
+                    <div class="search-bar">
+                        <span style="font-weight:500">选择班级：</span>
+                        <el-select v-model="selectedClassId" placeholder="请选择班级"
+                                   @change="loadSchedule" style="width:200px">
+                            <el-option v-for="c in classList" :key="c.id"
+                                       :label="c.className" :value="c.id"></el-option>
+                        </el-select>
+                    </div>
+
+                    <!-- 课表表格 -->
+                    <table class="schedule-table" v-loading="loading">
+                        <thead>
+                            <tr>
+                                <th style="width:100px">时间段</th>
+                                <th v-for="d in 5" :key="d">{{ dayLabels[d-1] }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="s in 4" :key="s">
+                                <td style="background:#f5f7fa;font-weight:500">{{ slotLabels[s-1] }}</td>
+                                <td v-for="d in 5" :key="d"
+                                    :class="getCellClass(d, s)"
+                                    @click="cellClick(d, s)">
+                                    <template v-if="getCourse(d, s)">
+                                        <div class="course-name">{{ getCourse(d, s).courseName }}</div>
+                                        <div class="course-teacher">{{ getCourse(d, s).teacherName }}</div>
+                                        <div class="course-room" v-if="getCourse(d, s).classroom">
+                                            {{ getCourse(d, s).classroom }}
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <span class="empty-slot">+ 添加课程</span>
+                                    </template>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 添加/编辑课程对话框 -->
+    <el-dialog v-model="dialogVisible"
+               :title="dialogMode === 'add' ? '添加课程' : (dialogMode === 'edit' ? '编辑课程' : '课程详情')"
+               width="450px" :close-on-click-modal="false" @close="resetForm">
+        <el-form v-if="dialogMode !== 'view'" ref="formRef" :model="form" :rules="rules" label-width="80px">
+            <el-form-item label="星期">
+                <el-input :model-value="dayLabels[form.dayOfWeek-1]" disabled></el-input>
+            </el-form-item>
+            <el-form-item label="时间段">
+                <el-input :model-value="slotLabels[form.timeSlot-1]" disabled></el-input>
+            </el-form-item>
+            <el-form-item label="课程名称" prop="courseName">
+                <el-input v-model="form.courseName" placeholder="如：语文" maxlength="20"></el-input>
+            </el-form-item>
+            <el-form-item label="任课老师" prop="teacherName">
+                <el-input v-model="form.teacherName" placeholder="请输入任课老师" maxlength="20"></el-input>
+            </el-form-item>
+            <el-form-item label="上课地点" prop="classroom">
+                <el-input v-model="form.classroom" placeholder="如：101教室（选填）" maxlength="50"></el-input>
+            </el-form-item>
+        </el-form>
+        <div v-else>
+            <p><strong>课程名称：</strong>{{ form.courseName }}</p>
+            <p><strong>任课老师：</strong>{{ form.teacherName }}</p>
+            <p><strong>星期：</strong>{{ dayLabels[form.dayOfWeek-1] }}</p>
+            <p><strong>时间段：</strong>{{ slotLabels[form.timeSlot-1] }}</p>
+            <p><strong>上课地点：</strong>{{ form.classroom || '未指定' }}</p>
+        </div>
+        <template #footer>
+            <template v-if="dialogMode === 'view'">
+                <el-button type="danger" @click="deleteCourse">删除课程</el-button>
+                <el-button type="primary" @click="dialogMode = 'edit'">编辑</el-button>
+            </template>
+            <template v-else>
+                <el-button @click="dialogVisible = false">取消</el-button>
+                <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
+            </template>
+        </template>
+    </el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var dayLabels = ['周一','周二','周三','周四','周五'];
+    var slotLabels = ['上午第一节','上午第二节','下午第一节','下午第二节'];
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus, username: '',
+                dayLabels: dayLabels, slotLabels: slotLabels,
+                classList: [], selectedClassId: null,
+                scheduleList: [], loading: false,
+                dialogVisible: false, dialogMode: 'add',
+                editId: null, submitLoading: false,
+                form: { courseName: '', teacherName: '', dayOfWeek: 1, timeSlot: 1, classroom: '' },
+                rules: {
+                    courseName:  [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+                    teacherName: [{ required: true, message: '请输入任课老师', trigger: 'blur' }]
+                }
+            };
+        },
+        methods: {
+            handleLogout: function() { API.logout().then(function() { logout(); }); },
+            loadClasses: function() {
+                var self = this;
+                API.class.all().then(function(res) {
+                    if (res.code === 200) {
+                        self.classList = res.data;
+                        if (!self.selectedClassId && res.data.length) {
+                            self.selectedClassId = res.data[0].id;
+                            self.loadSchedule();
+                        }
+                    }
+                });
+            },
+            loadSchedule: function() {
+                if (!this.selectedClassId) return;
+                var self = this;
+                self.loading = true;
+                API.schedule.list({ classId: self.selectedClassId }).then(function(res) {
+                    self.loading = false;
+                    self.scheduleList = res.code === 200 ? res.data : [];
+                });
+            },
+            getCourse: function(day, slot) {
+                return this.scheduleList.find(function(c) {
+                    return c.dayOfWeek === day && c.timeSlot === slot;
+                }) || null;
+            },
+            getCellClass: function(day, slot) {
+                return this.getCourse(day, slot) ? 'has-course' : 'empty-slot';
+            },
+            cellClick: function(day, slot) {
+                var course = this.getCourse(day, slot);
+                if (course) {
+                    this.form = {
+                        courseName: course.courseName,
+                        teacherName: course.teacherName,
+                        dayOfWeek: day, timeSlot: slot,
+                        classroom: course.classroom || ''
+                    };
+                    this.editId = course.id;
+                    this.dialogMode = 'view';
+                } else {
+                    this.form = { courseName: '', teacherName: '', dayOfWeek: day, timeSlot: slot, classroom: '' };
+                    this.editId = null;
+                    this.dialogMode = 'add';
+                }
+                this.dialogVisible = true;
+            },
+            handleSubmit: function() {
+                var self = this;
+                self.$refs.formRef.validate(function(valid) {
+                    if (!valid) return;
+                    self.submitLoading = true;
+                    var fn;
+                    if (self.dialogMode === 'add') {
+                        fn = API.schedule.create({
+                            classId: self.selectedClassId,
+                            courseName: self.form.courseName,
+                            teacherName: self.form.teacherName,
+                            dayOfWeek: self.form.dayOfWeek,
+                            timeSlot: self.form.timeSlot,
+                            classroom: self.form.classroom || undefined
+                        });
+                    } else {
+                        fn = API.schedule.update(self.editId, {
+                            courseName: self.form.courseName,
+                            teacherName: self.form.teacherName,
+                            dayOfWeek: self.form.dayOfWeek,
+                            timeSlot: self.form.timeSlot,
+                            classroom: self.form.classroom || undefined
+                        });
+                    }
+                    fn.then(function(res) {
+                        self.submitLoading = false;
+                        if (res.code === 200) {
+                            ElMessage.success(self.dialogMode === 'add' ? '添加成功' : '修改成功');
+                            self.dialogVisible = false;
+                            self.loadSchedule();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                });
+            },
+            deleteCourse: function() {
+                var self = this;
+                ElMessageBox.confirm('确认删除课程"' + self.form.courseName + '"？', '提示', {
+                    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
+                }).then(function() {
+                    API.schedule.delete(self.editId).then(function(res) {
+                        if (res.code === 200) {
+                            ElMessage.success('删除成功');
+                            self.dialogVisible = false;
+                            self.loadSchedule();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                }).catch(function() {});
+            },
+            resetForm: function() {
+                var self = this;
+                self.$nextTick(function() {
+                    self.$refs.formRef && self.$refs.formRef.resetFields();
+                });
+            }
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            this.loadClasses();
+        }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>

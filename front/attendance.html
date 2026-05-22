@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 考勤打卡</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        .att-status-select { width: 100px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === 'attendance' }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="header">
+                <span class="header-left">考勤打卡</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <main class="content">
+                <div class="page-container">
+                    <!-- 操作栏 -->
+                    <div class="search-bar">
+                        <span style="font-weight:500">班级：</span>
+                        <el-select v-model="classId" placeholder="请选择班级" style="width:180px">
+                            <el-option v-for="c in classList" :key="c.id"
+                                       :label="c.className" :value="c.id"></el-option>
+                        </el-select>
+                        <span style="font-weight:500;margin-left:12px">日期：</span>
+                        <el-date-picker v-model="date" type="date"
+                                        value-format="YYYY-MM-DD" placeholder="请选择日期"
+                                        style="width:170px" @change="loadRecords"></el-date-picker>
+                        <el-button type="primary" @click="loadRecords" :disabled="!classId || !date">
+                            查询</el-button>
+                        <span class="spacer"></span>
+                        <el-button type="primary" @click="saveAttendance"
+                                   :disabled="!classId || !date || records.length === 0">
+                            保存考勤</el-button>
+                    </div>
+
+                    <!-- 统计栏 -->
+                    <div class="stats-summary" v-if="records.length">
+                        <div class="stats-summary-item">
+                            <span class="label">应到：</span><span class="value">{{ stats.totalCount }}</span>
+                        </div>
+                        <div class="stats-summary-item">
+                            <span class="label">出勤：</span><span class="value" style="color:#67C23A">{{ stats.presentCount }}</span>
+                        </div>
+                        <div class="stats-summary-item">
+                            <span class="label">迟到：</span><span class="value" style="color:#E6A23C">{{ stats.lateCount }}</span>
+                        </div>
+                        <div class="stats-summary-item">
+                            <span class="label">请假：</span><span class="value" style="color:#409EFF">{{ stats.leaveCount }}</span>
+                        </div>
+                        <div class="stats-summary-item">
+                            <span class="label">缺勤：</span><span class="value" style="color:#F56C6C">{{ stats.absentCount }}</span>
+                        </div>
+                        <div class="stats-summary-item">
+                            <span class="label">出勤率：</span><span class="value">{{ stats.attendanceRate }}%</span>
+                        </div>
+                    </div>
+
+                    <!-- 考勤列表 -->
+                    <el-table :data="records" border stripe v-loading="loading" style="width:100%"
+                              max-height="520">
+                        <el-table-column prop="studentName" label="姓名" width="120"></el-table-column>
+                        <el-table-column prop="studentNo" label="学号" width="140"></el-table-column>
+                        <el-table-column label="考勤状态" width="160">
+                            <template #default="scope">
+                                <el-select v-model="scope.row.status"
+                                           size="small" class="att-status-select"
+                                           @change="recalcStats">
+                                    <el-option v-for="st in statusOptions" :key="st.value"
+                                               :label="st.label" :value="st.value"></el-option>
+                                </el-select>
+                                <el-tag size="small"
+                                        :type="statusTagType(scope.row.status)"
+                                        style="margin-left:6px">
+                                    {{ statusText(scope.row.status) }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-empty v-if="!loading && records.length === 0 && classId && date"
+                              description="该班级暂无学生"></el-empty>
+                    <el-empty v-if="!classId || !date"
+                              description="请选择班级和日期后查询"></el-empty>
+                </div>
+            </main>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var statusOptions = [
+        { value: 1, label: '出勤' },
+        { value: 2, label: '迟到' },
+        { value: 3, label: '请假' },
+        { value: 4, label: '缺勤' }
+    ];
+
+    function statusText(v) {
+        var m = { 1:'出勤', 2:'迟到', 3:'请假', 4:'缺勤' };
+        return m[v] || '';
+    }
+
+    function statusTagType(v) {
+        var m = { 1:'success', 2:'warning', 3:'', 4:'danger' };
+        return m[v] || 'info';
+    }
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus, username: '',
+                classList: [], classId: null,
+                date: '',
+                records: [], loading: false,
+                statusOptions: statusOptions,
+                stats: { totalCount:0, presentCount:0, lateCount:0, leaveCount:0, absentCount:0, attendanceRate:0 }
+            };
+        },
+        methods: {
+            statusText: statusText,
+            statusTagType: statusTagType,
+            handleLogout: function() { API.logout().then(function() { logout(); }); },
+            loadClasses: function() {
+                var self = this;
+                API.class.all().then(function(res) {
+                    if (res.code === 200) self.classList = res.data;
+                });
+            },
+            loadRecords: function() {
+                if (!this.classId || !this.date) return;
+                var self = this;
+                self.loading = true;
+                API.attendance.list({ classId: self.classId, date: self.date }).then(function(res) {
+                    self.loading = false;
+                    if (res.code === 200) {
+                        self.records = res.data;
+                        self.recalcStats();
+                    }
+                });
+            },
+            recalcStats: function() {
+                var total = this.records.length;
+                var pc = 0, lc = 0, lv = 0, ab = 0;
+                this.records.forEach(function(r) {
+                    if (r.status === 1) pc++;
+                    else if (r.status === 2) lc++;
+                    else if (r.status === 3) lv++;
+                    else if (r.status === 4) ab++;
+                });
+                this.stats = {
+                    totalCount: total,
+                    presentCount: pc,
+                    lateCount: lc,
+                    leaveCount: lv,
+                    absentCount: ab,
+                    attendanceRate: total ? parseFloat(((pc + lc) / total * 100).toFixed(1)) : 0
+                };
+            },
+            saveAttendance: function() {
+                var self = this;
+                if (!self.classId) { ElMessage.warning('请选择班级'); return; }
+                if (!self.date)   { ElMessage.warning('请选择日期'); return; }
+                if (!self.records.length) { ElMessage.warning('没有可保存的考勤记录'); return; }
+
+                var recs = self.records.map(function(r) {
+                    return { studentId: r.studentId, status: r.status };
+                });
+                API.attendance.batchSave({
+                    classId: self.classId,
+                    date: self.date,
+                    records: recs
+                }).then(function(res) {
+                    if (res.code === 200) {
+                        ElMessage.success('保存成功');
+                        self.loadRecords();
+                    } else {
+                        ElMessage.error(res.message);
+                    }
+                });
+            }
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            this.date = new Date().toISOString().substring(0, 10);
+            this.loadClasses();
+        }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>

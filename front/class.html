@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 班级管理</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === 'class' }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="header">
+                <span class="header-left">班级管理</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <main class="content">
+                <div class="page-container">
+                    <div class="search-bar">
+                        <el-input v-model="searchName" placeholder="班级名称" clearable
+                                  @keyup.enter="handleSearch" @clear="handleSearch"></el-input>
+                        <el-button type="primary" @click="handleSearch">搜索</el-button>
+                        <span class="spacer"></span>
+                        <el-button type="primary" @click="openAdd">新增班级</el-button>
+                    </div>
+
+                    <el-table :data="tableData" border stripe v-loading="loading" style="width:100%">
+                        <el-table-column prop="className" label="班级名称" min-width="130"></el-table-column>
+                        <el-table-column prop="teacherName" label="负责老师" width="120"></el-table-column>
+                        <el-table-column prop="description" label="班级描述" min-width="200">
+                            <template #default="scope">
+                                {{ scope.row.description || '-' }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="studentCount" label="学生人数" width="100"></el-table-column>
+                        <el-table-column prop="createTime" label="创建时间" width="180"></el-table-column>
+                        <el-table-column label="操作" width="150" fixed="right">
+                            <template #default="scope">
+                                <el-button size="small" type="primary" link @click="openEdit(scope.row)">编辑</el-button>
+                                <el-button size="small" type="danger" link @click="handleDelete(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-pagination
+                        style="margin-top:16px;justify-content:flex-end"
+                        v-model:current-page="page" v-model:page-size="pageSize"
+                        :page-sizes="[10, 20, 50]" :total="total"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        @size-change="loadData" @current-change="loadData"
+                        background></el-pagination>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 新增/编辑对话框 -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑班级' : '新增班级'"
+               width="480px" :close-on-click-modal="false" @close="resetForm">
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+            <el-form-item label="班级名称" prop="className">
+                <el-input v-model="form.className" placeholder="请输入班级名称" maxlength="30"></el-input>
+            </el-form-item>
+            <el-form-item label="负责老师" prop="teacherName">
+                <el-input v-model="form.teacherName" placeholder="请输入负责老师姓名" maxlength="20"></el-input>
+            </el-form-item>
+            <el-form-item label="班级描述" prop="description">
+                <el-input v-model="form.description" type="textarea" :rows="3"
+                          placeholder="请输入班级描述（选填）" maxlength="200"
+                          show-word-limit></el-input>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
+        </template>
+    </el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus, username: '',
+                searchName: '', tableData: [], page: 1, pageSize: 10, total: 0, loading: false,
+                dialogVisible: false, isEdit: false, editId: null, submitLoading: false,
+                form: { className: '', teacherName: '', description: '' },
+                rules: {
+                    className:   [{ required: true, message: '请输入班级名称', trigger: 'blur' }],
+                    teacherName: [{ required: true, message: '请输入负责老师姓名', trigger: 'blur' }]
+                }
+            };
+        },
+        methods: {
+            handleLogout: function() { API.logout().then(function() { logout(); }); },
+            handleSearch: function() { this.page = 1; this.loadData(); },
+            loadData: function() {
+                var self = this;
+                self.loading = true;
+                API.class.list({
+                    page: self.page, pageSize: self.pageSize,
+                    className: self.searchName || undefined
+                }).then(function(res) {
+                    self.loading = false;
+                    if (res.code === 200) {
+                        self.tableData = res.data.list;
+                        self.total = res.data.total;
+                    }
+                });
+            },
+            openAdd: function() {
+                this.isEdit = false; this.editId = null; this.resetForm(); this.dialogVisible = true;
+            },
+            openEdit: function(row) {
+                this.isEdit = true; this.editId = row.id;
+                this.form = { className: row.className, teacherName: row.teacherName,
+                              description: row.description || '' };
+                this.dialogVisible = true;
+            },
+            handleSubmit: function() {
+                var self = this;
+                self.$refs.formRef.validate(function(valid) {
+                    if (!valid) return;
+                    self.submitLoading = true;
+                    var fn = self.isEdit
+                        ? API.class.update(self.editId, self.form)
+                        : API.class.create(self.form);
+                    fn.then(function(res) {
+                        self.submitLoading = false;
+                        if (res.code === 200) {
+                            ElMessage.success(self.isEdit ? '修改成功' : '新增成功');
+                            self.dialogVisible = false;
+                            self.loadData();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                });
+            },
+            handleDelete: function(row) {
+                var self = this;
+                ElMessageBox.confirm('确认删除班级"' + row.className + '"？', '提示', {
+                    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
+                }).then(function() {
+                    API.class.delete(row.id).then(function(res) {
+                        if (res.code === 200) {
+                            ElMessage.success('删除成功');
+                            self.loadData();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                }).catch(function() {});
+            },
+            resetForm: function() {
+                var self = this;
+                self.$nextTick(function() {
+                    self.$refs.formRef && self.$refs.formRef.resetFields();
+                });
+                this.form = { className: '', teacherName: '', description: '' };
+            }
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            this.loadData();
+        }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>

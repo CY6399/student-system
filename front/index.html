@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 仪表盘</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        .menu-icon-dashboard::before { content:'⌂'; }
+        .menu-icon-student::before   { content:'☺'; }
+        .menu-icon-class::before     { content:'☃'; }
+        .menu-icon-schedule::before  { content:'☗'; }
+        .menu-icon-attendance::before{ content:'☛'; }
+        .menu-icon-score::before     { content:'☆'; }
+        .menu-icon-homework::before  { content:'✎'; }
+        .card-icon-dashboard::before   { content:'⌂'; }
+        .card-icon-users::before       { content:'☺'; }
+        .card-icon-rate::before        { content:'☛'; }
+        .card-icon-pending::before     { content:'✎'; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === activeMenu }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <div class="main-area">
+            <!-- 顶部栏 -->
+            <header class="header">
+                <span class="header-left">{{ pageTitle }}</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <!-- 内容 -->
+            <main class="content">
+                <!-- 统计卡片 -->
+                <div class="stat-cards">
+                    <div class="stat-card">
+                        <div class="stat-card-icon blue">
+                            <span class="card-icon-users"></span>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">{{ stats.totalStudent }}</div>
+                            <div class="stat-card-label">学生总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon green">
+                            <span class="card-icon-dashboard"></span>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">{{ stats.totalClass }}</div>
+                            <div class="stat-card-label">班级总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon orange">
+                            <span class="card-icon-rate"></span>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">{{ stats.todayAttendanceRate }}<span>%</span></div>
+                            <div class="stat-card-label">今日出勤率</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon red">
+                            <span class="card-icon-pending"></span>
+                        </div>
+                        <div class="stat-card-body">
+                            <div class="stat-card-value">{{ stats.pendingHomeworkCount }}</div>
+                            <div class="stat-card-label">待批改作业数</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 图表行 -->
+                <div class="chart-row">
+                    <div class="chart-panel">
+                        <div class="chart-panel-title">各班级学生人数分布</div>
+                        <div class="chart-box" ref="barChartRef"></div>
+                    </div>
+                    <div class="chart-panel">
+                        <div class="chart-panel-title">近 7 天出勤趋势</div>
+                        <div class="chart-box" ref="lineChartRef"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    // 未登录跳转
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus,
+                activeMenu: 'dashboard',
+                pageTitle: '仪表盘',
+                username: '',
+                stats: { totalStudent: 0, totalClass: 0, todayAttendanceRate: 0, pendingHomeworkCount: 0 },
+                barChart: null,
+                lineChart: null
+            };
+        },
+        methods: {
+            handleLogout: function() {
+                API.logout().then(function() { logout(); });
+            },
+            loadStats: function() {
+                var self = this;
+                API.dashboard.stats().then(function(res) {
+                    if (res.code === 200) self.stats = res.data;
+                });
+            },
+            loadClassDistribution: function() {
+                var self = this;
+                API.dashboard.classStudentDistribution().then(function(res) {
+                    if (res.code !== 200 || !res.data.length) return;
+                    var names = res.data.map(function(d) { return d.className; });
+                    var values = res.data.map(function(d) { return d.studentCount; });
+                    self.barChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'category', data: names, axisLabel: { rotate: 30 } },
+                        yAxis: { type: 'value', name: '人数' },
+                        series: [{
+                            type: 'bar', data: values,
+                            itemStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: '#409EFF' },
+                                    { offset: 1, color: '#79bbff' }
+                                ])
+                            },
+                            barMaxWidth: 40
+                        }]
+                    });
+                });
+            },
+            loadAttendanceTrend: function() {
+                var self = this;
+                API.dashboard.attendanceTrend().then(function(res) {
+                    if (res.code !== 200 || !res.data.length) return;
+                    var dates = res.data.map(function(d) { return d.date; });
+                    var rates = res.data.map(function(d) { return d.attendanceRate; });
+                    self.lineChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                        xAxis: { type: 'category', data: dates, boundaryGap: false },
+                        yAxis: { type: 'value', name: '出勤率(%)', min: 0, max: 100 },
+                        series: [{
+                            type: 'line', data: rates, smooth: true,
+                            lineStyle: { color: '#67C23A', width: 2 },
+                            itemStyle: { color: '#67C23A' },
+                            areaStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(103,194,58,0.3)' },
+                                    { offset: 1, color: 'rgba(103,194,58,0.02)' }
+                                ])
+                            }
+                        }]
+                    });
+                });
+            }
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            var self = this;
+
+            // 初始化图表
+            this.barChart = echarts.init(this.$refs.barChartRef);
+            this.lineChart = echarts.init(this.$refs.lineChartRef);
+
+            // 加载数据
+            this.loadStats();
+            this.loadClassDistribution();
+            this.loadAttendanceTrend();
+
+            // 窗口 resize 时重绘
+            window.addEventListener('resize', function() {
+                self.barChart && self.barChart.resize();
+                self.lineChart && self.lineChart.resize();
+            });
+        },
+        beforeUnmount: function() {
+            this.barChart && this.barChart.dispose();
+            this.lineChart && this.lineChart.dispose();
+        }
+    });
+
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 成绩管理</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === 'score' }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="header">
+                <span class="header-left">成绩管理</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <main class="content">
+                <div class="page-container">
+                    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+                        <!-- Tab 1: 按班级查询 -->
+                        <el-tab-pane label="按班级查询" name="classQuery">
+                            <div class="search-bar">
+                                <el-select v-model="q.classId" placeholder="选择班级" style="width:170px">
+                                    <el-option v-for="c in classList" :key="c.id"
+                                               :label="c.className" :value="c.id"></el-option>
+                                </el-select>
+                                <el-select v-model="q.subject" placeholder="科目" style="width:130px"
+                                           filterable allow-create>
+                                    <el-option v-for="s in subjects" :key="s"
+                                               :label="s" :value="s"></el-option>
+                                </el-select>
+                                <el-date-picker v-model="q.examDate" type="date"
+                                                value-format="YYYY-MM-DD" placeholder="考试日期"
+                                                style="width:160px"></el-date-picker>
+                                <el-select v-model="q.examType" placeholder="考试类型" style="width:140px">
+                                    <el-option v-for="t in examTypes" :key="t.value"
+                                               :label="t.label" :value="t.value"></el-option>
+                                </el-select>
+                                <el-button type="primary" @click="queryClass">查询</el-button>
+                            </div>
+
+                            <!-- 统计 -->
+                            <div class="stats-summary" v-if="queryResult.list.length">
+                                <div class="stats-summary-item">
+                                    <span class="label">平均分：</span><span class="value">{{ queryResult.stats.avgScore }}</span>
+                                </div>
+                                <div class="stats-summary-item">
+                                    <span class="label">最高分：</span><span class="value" style="color:#67C23A">{{ queryResult.stats.maxScore }}</span>
+                                </div>
+                                <div class="stats-summary-item">
+                                    <span class="label">最低分：</span><span class="value" style="color:#F56C6C">{{ queryResult.stats.minScore }}</span>
+                                </div>
+                                <div class="stats-summary-item">
+                                    <span class="label">及格率：</span><span class="value">{{ queryResult.stats.passRate }}%</span>
+                                </div>
+                            </div>
+
+                            <el-table :data="queryResult.list" border stripe v-loading="qLoading" style="width:100%">
+                                <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+                                <el-table-column prop="studentNo" label="学号" width="140"></el-table-column>
+                                <el-table-column prop="score" label="成绩" width="100"></el-table-column>
+                                <el-table-column prop="remark" label="备注" min-width="150">
+                                    <template #default="scope">{{ scope.row.remark || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column label="操作" width="80">
+                                    <template #default="scope">
+                                        <el-button size="small" type="primary" link
+                                                   @click="editScore(scope.row)">编辑</el-button>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <el-empty v-if="!qLoading && queryResult.list.length === 0 && qSearched"
+                                      description="暂无成绩数据"></el-empty>
+                        </el-tab-pane>
+
+                        <!-- Tab 2: 按学生查询 -->
+                        <el-tab-pane label="按学生查询" name="studentQuery">
+                            <div class="search-bar">
+                                <span style="font-weight:500">学生：</span>
+                                <el-input v-model="studentSearchName" placeholder="输入学生姓名搜索"
+                                          clearable @keyup.enter="queryStudent" style="width:200px"></el-input>
+                                <el-button type="primary" @click="queryStudent">查询</el-button>
+                            </div>
+
+                            <el-table :data="studentScores.list" border stripe
+                                      v-loading="sqLoading" style="width:100%">
+                                <el-table-column prop="subject" label="科目" width="100"></el-table-column>
+                                <el-table-column prop="score" label="成绩" width="100"></el-table-column>
+                                <el-table-column prop="examDate" label="考试日期" width="130"></el-table-column>
+                                <el-table-column prop="examTypeText" label="考试类型" width="120"></el-table-column>
+                                <el-table-column prop="remark" label="备注" min-width="150">
+                                    <template #default="scope">{{ scope.row.remark || '-' }}</template>
+                                </el-table-column>
+                            </el-table>
+
+                            <el-pagination
+                                style="margin-top:16px;justify-content:flex-end"
+                                v-if="studentScores.total > 0"
+                                v-model:current-page="sqPage" v-model:page-size="sqPageSize"
+                                :page-sizes="[10, 20, 50]" :total="studentScores.total"
+                                layout="total, sizes, prev, pager, next"
+                                @size-change="queryStudent" @current-change="queryStudent"
+                                background small></el-pagination>
+                        </el-tab-pane>
+
+                        <!-- Tab 3: 录入成绩 -->
+                        <el-tab-pane label="录入成绩" name="entry">
+                            <div class="search-bar">
+                                <el-select v-model="e.classId" placeholder="选择班级" style="width:170px"
+                                           @change="loadEntryStudents">
+                                    <el-option v-for="c in classList" :key="c.id"
+                                               :label="c.className" :value="c.id"></el-option>
+                                </el-select>
+                                <el-select v-model="e.subject" placeholder="科目" style="width:130px"
+                                           filterable allow-create>
+                                    <el-option v-for="s in subjects" :key="s"
+                                               :label="s" :value="s"></el-option>
+                                </el-select>
+                                <el-date-picker v-model="e.examDate" type="date"
+                                                value-format="YYYY-MM-DD" placeholder="考试日期"
+                                                style="width:160px"></el-date-picker>
+                                <el-select v-model="e.examType" placeholder="考试类型" style="width:140px">
+                                    <el-option v-for="t in examTypes" :key="t.value"
+                                               :label="t.label" :value="t.value"></el-option>
+                                </el-select>
+                                <el-button type="primary" @click="loadEntryStudents">加载学生</el-button>
+                                <span class="spacer"></span>
+                                <el-button type="primary" @click="saveEntry"
+                                           :disabled="entryList.length === 0">保存成绩</el-button>
+                            </div>
+
+                            <el-table :data="entryList" border stripe v-loading="eLoading" style="width:100%"
+                                      max-height="480">
+                                <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+                                <el-table-column prop="studentNo" label="学号" width="140"></el-table-column>
+                                <el-table-column label="成绩" width="200">
+                                    <template #default="scope">
+                                        <el-input-number v-model="scope.row.score"
+                                                         :min="0" :max="100" :precision="1"
+                                                         :step="0.5" size="small"
+                                                         style="width:140px"></el-input-number>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="备注" min-width="200">
+                                    <template #default="scope">
+                                        <el-input v-model="scope.row.remark"
+                                                  placeholder="备注（选填）" size="small"
+                                                  maxlength="100"></el-input>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <el-empty v-if="!eLoading && entryList.length === 0 && eSearched"
+                                      description="该班级暂无学生"></el-empty>
+                        </el-tab-pane>
+                    </el-tabs>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 编辑成绩对话框 -->
+    <el-dialog v-model="editDialogVisible" title="编辑成绩" width="400px"
+               :close-on-click-modal="false">
+        <el-form ref="editFormRef" :model="editForm" label-width="80px">
+            <el-form-item label="学生">
+                <el-input :model-value="editForm.studentName" disabled></el-input>
+            </el-form-item>
+            <el-form-item label="成绩" prop="score">
+                <el-input-number v-model="editForm.score" :min="0" :max="100"
+                                 :precision="1" :step="0.5" style="width:100%"></el-input-number>
+            </el-form-item>
+            <el-form-item label="备注" prop="remark">
+                <el-input v-model="editForm.remark" maxlength="100"
+                          placeholder="备注（选填）"></el-input>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="editDialogVisible = false">取消</el-button>
+            <el-button type="primary" :loading="editLoading" @click="saveEdit">确定</el-button>
+        </template>
+    </el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var subjects = ['语文','数学','英语','物理','化学','生物','历史','地理','政治'];
+    var examTypes = [
+        { value:1, label:'期中考试' }, { value:2, label:'期末考试' },
+        { value:3, label:'月考' },     { value:4, label:'单元测试' },
+        { value:5, label:'其他' }
+    ];
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus, username: '', subjects: subjects, examTypes: examTypes,
+                classList: [], activeTab: 'classQuery',
+
+                // 按班级查询
+                q: { classId: null, subject: '', examDate: '', examType: null },
+                queryResult: { list: [], stats: { avgScore:0, maxScore:0, minScore:0, passRate:0 } },
+                qLoading: false, qSearched: false,
+
+                // 按学生查询
+                studentSearchName: '', studentScores: { total:0, list:[] },
+                sqPage: 1, sqPageSize: 10, sqLoading: false,
+
+                // 录入成绩
+                e: { classId: null, subject: '', examDate: '', examType: null },
+                entryList: [], eLoading: false, eSearched: false,
+
+                // 编辑弹窗
+                editDialogVisible: false, editLoading: false,
+                editForm: { id: null, studentName: '', score: 0, remark: '' }
+            };
+        },
+        methods: {
+            handleLogout: function() { API.logout().then(function() { logout(); }); },
+            loadClasses: function() {
+                var self = this;
+                API.class.all().then(function(res) {
+                    if (res.code === 200) self.classList = res.data;
+                });
+            },
+
+            /* -- 按班级查询 -- */
+            queryClass: function() {
+                var self = this;
+                if (!self.q.classId || !self.q.subject || !self.q.examDate || !self.q.examType) {
+                    ElMessage.warning('请完善查询条件'); return;
+                }
+                self.qLoading = true; self.qSearched = true;
+                API.score.list({
+                    classId: self.q.classId, subject: self.q.subject,
+                    examDate: self.q.examDate, examType: self.q.examType
+                }).then(function(res) {
+                    self.qLoading = false;
+                    if (res.code === 200) {
+                        self.queryResult = res.data;
+                    } else {
+                        self.queryResult = { list: [], stats: { avgScore:0, maxScore:0, minScore:0, passRate:0 } };
+                    }
+                });
+            },
+
+            /* -- 按学生查询 -- */
+            queryStudent: function() {
+                var self = this;
+                if (!self.studentSearchName) { ElMessage.warning('请输入学生姓名'); return; }
+                // 先查找学生ID
+                self.sqLoading = true;
+                API.student.list({ page:1, pageSize:50, name: self.studentSearchName }).then(function(res) {
+                    if (res.code !== 200 || !res.data.list.length) {
+                        self.sqLoading = false;
+                        self.studentScores = { total:0, list:[] };
+                        return;
+                    }
+                    var sid = res.data.list[0].id;
+                    API.score.studentScores(sid, { page: self.sqPage, pageSize: self.sqPageSize }).then(function(r) {
+                        self.sqLoading = false;
+                        self.studentScores = r.code === 200 ? r.data : { total:0, list:[] };
+                    });
+                });
+            },
+
+            /* -- 录入成绩 -- */
+            loadEntryStudents: function() {
+                var self = this;
+                if (!self.e.classId || !self.e.subject || !self.e.examDate || !self.e.examType) {
+                    ElMessage.warning('请完善班级/科目/考试日期/考试类型'); return;
+                }
+                self.eLoading = true; self.eSearched = true;
+                API.student.list({ page:1, pageSize:500, classId: self.e.classId }).then(function(res) {
+                    self.eLoading = false;
+                    if (res.code === 200) {
+                        self.entryList = res.data.list.map(function(s) {
+                            return { studentId: s.id, studentName: s.name, studentNo: s.studentNo,
+                                     score: null, remark: '' };
+                        });
+                    }
+                });
+            },
+            saveEntry: function() {
+                var self = this;
+                var invalid = self.entryList.filter(function(r) { return r.score === null || r.score < 0 || r.score > 100; });
+                if (self.entryList.some(function(r) { return r.score === null; })) {
+                    ElMessage.warning('请为每位学生填写成绩'); return;
+                }
+                if (invalid.length) { ElMessage.warning('成绩应在 0-100 之间'); return; }
+
+                var recs = self.entryList.map(function(r) {
+                    return { studentId: r.studentId, score: r.score, remark: r.remark || null };
+                });
+                API.score.batchSave({
+                    subject: self.e.subject, examDate: self.e.examDate,
+                    examType: self.e.examType, records: recs
+                }).then(function(res) {
+                    if (res.code === 200) {
+                        ElMessage.success('保存成功');
+                        self.entryList = [];
+                        self.eSearched = false;
+                    } else {
+                        ElMessage.error(res.message);
+                    }
+                });
+            },
+
+            /* -- 编辑单条 -- */
+            editScore: function(row) {
+                this.editForm = { id: row.id, studentName: row.studentName, score: row.score, remark: row.remark || '' };
+                this.editDialogVisible = true;
+            },
+            saveEdit: function() {
+                var self = this;
+                if (self.editForm.score < 0 || self.editForm.score > 100) {
+                    ElMessage.warning('成绩应在 0-100 之间'); return;
+                }
+                self.editLoading = true;
+                API.score.update(self.editForm.id, {
+                    score: self.editForm.score,
+                    remark: self.editForm.remark || null
+                }).then(function(res) {
+                    self.editLoading = false;
+                    if (res.code === 200) {
+                        ElMessage.success('修改成功');
+                        self.editDialogVisible = false;
+                        self.queryClass();
+                    } else {
+                        ElMessage.error(res.message);
+                    }
+                });
+            },
+
+            onTabChange: function() {}
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            this.loadClasses();
+        }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>

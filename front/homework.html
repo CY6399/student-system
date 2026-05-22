@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教学数字平台 - 作业管理</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <style>
+        .hw-layout { display: flex; gap: 16px; }
+        .hw-left { width: 380px; flex-shrink: 0; }
+        .hw-right { flex: 1; min-width: 0; }
+        .hw-left-panel { background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .hw-right-panel { background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 16px; }
+        .hw-left-header { padding: 12px 16px; border-bottom: 1px solid #ebeef5; display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+        .hw-item { padding: 12px 16px; border-bottom: 1px solid #ebeef5; cursor: pointer; transition: background 0.2s; }
+        .hw-item:hover { background: #f5f7fa; }
+        .hw-item.active { background: #ecf5ff; border-left: 3px solid #409EFF; }
+        .hw-item-title { font-size: 14px; font-weight: 500; color: #303133; margin-bottom: 6px; }
+        .hw-item-meta { font-size: 12px; color: #909399; line-height: 1.8; }
+        .hw-item-meta span { margin-right: 12px; }
+        .hw-item-progress { margin-top: 6px; }
+        .hw-empty { text-align: center; padding: 40px 0; color: #909399; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">教学数字平台</div>
+            <nav class="sidebar-menu">
+                <a v-for="m in menus" :key="m.key" :href="m.href"
+                   :class="['menu-item', { active: m.key === 'homework' }]">
+                    <span class="menu-icon" v-html="m.icon"></span>
+                    <span class="menu-label">{{ m.label }}</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="main-area">
+            <header class="header">
+                <span class="header-left">作业管理</span>
+                <div class="header-right">
+                    <span class="header-user">{{ username }}</span>
+                    <span class="header-logout" @click="handleLogout">退出登录</span>
+                </div>
+            </header>
+
+            <main class="content">
+                <!-- 顶部：班级选择 + 发布按钮 -->
+                <div class="search-bar" style="margin-bottom:16px">
+                    <span style="font-weight:500">班级：</span>
+                    <el-select v-model="classId" placeholder="请选择班级" style="width:180px"
+                               @change="loadHomeworkList">
+                        <el-option v-for="c in classList" :key="c.id"
+                                   :label="c.className" :value="c.id"></el-option>
+                    </el-select>
+                    <span class="spacer"></span>
+                    <el-button type="primary" @click="openPublish" :disabled="!classId">发布作业</el-button>
+                </div>
+
+                <div class="hw-layout" v-if="classId">
+                    <!-- 左侧：作业列表 -->
+                    <div class="hw-left">
+                        <div class="hw-left-panel">
+                            <div class="hw-left-header">作业列表</div>
+                            <div v-loading="hwLoading" style="min-height:200px">
+                                <div v-for="hw in homeworkList" :key="hw.id"
+                                     :class="['hw-item', { active: selectedHw && selectedHw.id === hw.id }]"
+                                     @click="selectHomework(hw)">
+                                    <div class="hw-item-title">{{ hw.title }}</div>
+                                    <div class="hw-item-meta">
+                                        <span>发布：{{ hw.publisher }}</span>
+                                        <span>截止：{{ hw.deadline }}</span>
+                                    </div>
+                                    <div class="hw-item-meta">
+                                        <el-tag size="small" :type="hw.status === 1 ? 'success' : 'info'">
+                                            {{ hw.statusText }}</el-tag>
+                                    </div>
+                                    <div class="hw-item-progress">
+                                        <span style="font-size:12px;color:#606266">
+                                            提交进度：{{ hw.submitCount }} / {{ hw.totalCount }}
+                                        </span>
+                                        <el-progress :percentage="hw.totalCount ? Math.round(hw.submitCount / hw.totalCount * 100) : 0"
+                                                     :stroke-width="6" style="margin-top:4px"></el-progress>
+                                    </div>
+                                </div>
+                                <div v-if="!hwLoading && homeworkList.length === 0" class="hw-empty">
+                                    暂无作业，请点击"发布作业"
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：提交详情 -->
+                    <div class="hw-right">
+                        <div class="hw-right-panel" v-if="selectedHw">
+                            <div style="font-weight:500;margin-bottom:12px">
+                                {{ selectedHw.title }} —— 提交情况
+                                <el-button size="small" type="danger" style="float:right"
+                                           @click="deleteHomework">删除作业</el-button>
+                            </div>
+                            <el-table :data="submissions.list" border stripe
+                                      v-loading="subLoading" style="width:100%" max-height="420">
+                                <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+                                <el-table-column prop="studentNo" label="学号" width="120"></el-table-column>
+                                <el-table-column label="状态" width="90">
+                                    <template #default="scope">
+                                        <el-tag size="small"
+                                                :type="scope.row.status === 3 ? 'success' : (scope.row.status === 2 ? 'warning' : 'info')">
+                                            {{ scope.row.statusText }}</el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="submitTime" label="提交时间" width="160">
+                                    <template #default="scope">{{ scope.row.submitTime || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column prop="score" label="评分" width="70">
+                                    <template #default="scope">{{ scope.row.score != null ? scope.row.score : '-' }}</template>
+                                </el-table-column>
+                                <el-table-column prop="comment" label="评语" min-width="140">
+                                    <template #default="scope">{{ scope.row.comment || '-' }}</template>
+                                </el-table-column>
+                                <el-table-column label="操作" width="80">
+                                    <template #default="scope">
+                                        <el-button v-if="scope.row.status === 2"
+                                                   size="small" type="primary" link
+                                                   @click="openGrade(scope.row)">批改</el-button>
+                                        <span v-else-if="scope.row.status === 1" style="color:#909399">--</span>
+                                        <span v-else style="color:#67C23A;font-size:12px">已批改</span>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <el-pagination
+                                style="margin-top:12px;justify-content:flex-end"
+                                v-if="submissions.total > 0"
+                                v-model:current-page="subPage" v-model:page-size="subPageSize"
+                                :page-sizes="[10, 20, 50]" :total="submissions.total"
+                                layout="total, sizes, prev, pager, next"
+                                @size-change="loadSubmissions" @current-change="loadSubmissions"
+                                background small></el-pagination>
+                        </div>
+                        <div class="hw-right-panel" v-else style="text-align:center;color:#909399;padding:60px 0">
+                            请选择左侧作业查看提交情况
+                        </div>
+                    </div>
+                </div>
+                <el-empty v-if="!classId" description="请先选择班级"></el-empty>
+            </main>
+        </div>
+    </div>
+
+    <!-- 发布作业对话框 -->
+    <el-dialog v-model="publishVisible" title="发布作业" width="520px"
+               :close-on-click-modal="false" @close="resetPublishForm">
+        <el-form ref="pubFormRef" :model="pubForm" :rules="pubRules" label-width="80px">
+            <el-form-item label="作业标题" prop="title">
+                <el-input v-model="pubForm.title" placeholder="请输入作业标题（2-50字）"
+                          maxlength="50" show-word-limit></el-input>
+            </el-form-item>
+            <el-form-item label="作业内容" prop="content">
+                <el-input v-model="pubForm.content" type="textarea" :rows="4"
+                          placeholder="请输入作业内容（10-1000字）"
+                          maxlength="1000" show-word-limit></el-input>
+            </el-form-item>
+            <el-form-item label="截止时间" prop="deadline">
+                <el-date-picker v-model="pubForm.deadline" type="datetime"
+                                value-format="YYYY-MM-DD HH:mm:ss"
+                                placeholder="请选择截止时间"
+                                style="width:100%"></el-date-picker>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="publishVisible = false">取消</el-button>
+            <el-button type="primary" :loading="pubLoading" @click="submitPublish">发布</el-button>
+        </template>
+    </el-dialog>
+
+    <!-- 批改作业对话框 -->
+    <el-dialog v-model="gradeVisible" title="批改作业" width="420px"
+               :close-on-click-modal="false">
+        <el-form ref="gradeFormRef" :model="gradeForm" label-width="80px">
+            <el-form-item label="学生">
+                <el-input :model-value="gradeForm.studentName" disabled></el-input>
+            </el-form-item>
+            <el-form-item label="评分" prop="score">
+                <el-input-number v-model="gradeForm.score" :min="0" :max="100"
+                                 :precision="1" :step="0.5" style="width:100%"></el-input-number>
+            </el-form-item>
+            <el-form-item label="评语" prop="comment">
+                <el-input v-model="gradeForm.comment" type="textarea" :rows="3"
+                          maxlength="200" show-word-limit
+                          placeholder="请输入评语（选填）"></el-input>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="gradeVisible = false">取消</el-button>
+            <el-button type="primary" :loading="gradeLoading" @click="submitGrade">确定</el-button>
+        </template>
+    </el-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus"></script>
+<script src="js/app.js"></script>
+
+<script>
+(function() {
+    if (!checkLogin()) { window.location.href = 'login.html'; }
+
+    var menus = [
+        { key:'dashboard',  label:'仪表盘',   href:'index.html',      icon:'&#x2302;' },
+        { key:'student',    label:'学生管理', href:'student.html',    icon:'&#x263A;' },
+        { key:'class',      label:'班级管理', href:'class.html',      icon:'&#x2603;' },
+        { key:'schedule',   label:'课程排课', href:'schedule.html',   icon:'&#x2617;' },
+        { key:'attendance', label:'考勤打卡', href:'attendance.html', icon:'&#x261B;' },
+        { key:'score',      label:'成绩管理', href:'score.html',      icon:'&#x2606;' },
+        { key:'homework',   label:'作业管理', href:'homework.html',   icon:'&#x270E;' }
+    ];
+
+    var app = Vue.createApp({
+        data: function() {
+            return {
+                menus: menus, username: '',
+                classList: [], classId: null,
+
+                // 作业列表
+                homeworkList: [], hwLoading: false,
+                selectedHw: null,
+
+                // 提交详情
+                submissions: { total:0, list:[] },
+                subPage: 1, subPageSize: 10, subLoading: false,
+
+                // 发布作业
+                publishVisible: false, pubLoading: false,
+                pubForm: { title: '', content: '', deadline: '' },
+                pubRules: {
+                    title:    [{ required: true, message: '请输入作业标题', trigger: 'blur' },
+                               { min: 2, max: 50, message: '标题长度 2-50 个字符', trigger: 'blur' }],
+                    content:  [{ required: true, message: '请输入作业内容', trigger: 'blur' },
+                               { min: 10, max: 1000, message: '内容长度 10-1000 个字符', trigger: 'blur' }],
+                    deadline: [{ required: true, message: '请选择截止时间', trigger: 'change' }]
+                },
+
+                // 批改
+                gradeVisible: false, gradeLoading: false,
+                gradeForm: { id: null, studentName: '', score: null, comment: '' }
+            };
+        },
+        methods: {
+            handleLogout: function() { API.logout().then(function() { logout(); }); },
+            loadClasses: function() {
+                var self = this;
+                API.class.all().then(function(res) {
+                    if (res.code === 200) self.classList = res.data;
+                });
+            },
+
+            /* -- 作业列表 -- */
+            loadHomeworkList: function() {
+                if (!this.classId) return;
+                var self = this;
+                self.hwLoading = true;
+                self.selectedHw = null;
+                self.submissions = { total:0, list:[] };
+                API.homework.list({ classId: self.classId, page: 1, pageSize: 100 }).then(function(res) {
+                    self.hwLoading = false;
+                    if (res.code === 200) {
+                        self.homeworkList = res.data.list;
+                        if (res.data.list.length) self.selectHomework(res.data.list[0]);
+                    }
+                });
+            },
+            selectHomework: function(hw) {
+                this.selectedHw = hw;
+                this.subPage = 1;
+                this.loadSubmissions();
+            },
+            loadSubmissions: function() {
+                if (!this.selectedHw) return;
+                var self = this;
+                self.subLoading = true;
+                API.homework.submissions(self.selectedHw.id, {
+                    page: self.subPage, pageSize: self.subPageSize
+                }).then(function(res) {
+                    self.subLoading = false;
+                    self.submissions = res.code === 200 ? res.data : { total:0, list:[] };
+                });
+            },
+
+            /* -- 发布作业 -- */
+            openPublish: function() {
+                this.resetPublishForm();
+                this.publishVisible = true;
+            },
+            submitPublish: function() {
+                var self = this;
+                self.$refs.pubFormRef.validate(function(valid) {
+                    if (!valid) return;
+                    var now = new Date().toISOString().replace('T',' ').substring(0, 19);
+                    if (self.pubForm.deadline < now) {
+                        ElMessage.error('截止时间不能早于当前时间'); return;
+                    }
+                    self.pubLoading = true;
+                    var user = getCurrentUser();
+                    API.homework.create({
+                        classId: self.classId,
+                        title: self.pubForm.title,
+                        content: self.pubForm.content,
+                        deadline: self.pubForm.deadline,
+                        publisher: user ? user.realName : '管理员'
+                    }).then(function(res) {
+                        self.pubLoading = false;
+                        if (res.code === 200) {
+                            ElMessage.success('发布成功');
+                            self.publishVisible = false;
+                            self.loadHomeworkList();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                });
+            },
+            resetPublishForm: function() {
+                var self = this;
+                self.$nextTick(function() {
+                    self.$refs.pubFormRef && self.$refs.pubFormRef.resetFields();
+                });
+                this.pubForm = { title: '', content: '', deadline: '' };
+            },
+
+            /* -- 删除作业 -- */
+            deleteHomework: function() {
+                if (!this.selectedHw) return;
+                var self = this;
+                ElMessageBox.confirm('确认删除作业"' + self.selectedHw.title + '"？', '提示', {
+                    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
+                }).then(function() {
+                    API.homework.delete(self.selectedHw.id).then(function(res) {
+                        if (res.code === 200) {
+                            ElMessage.success('删除成功');
+                            self.loadHomeworkList();
+                        } else {
+                            ElMessage.error(res.message);
+                        }
+                    });
+                }).catch(function() {});
+            },
+
+            /* -- 批改作业 -- */
+            openGrade: function(row) {
+                this.gradeForm = { id: row.id, studentName: row.studentName, score: row.score || null, comment: row.comment || '' };
+                this.gradeVisible = true;
+            },
+            submitGrade: function() {
+                var self = this;
+                if (self.gradeForm.score == null || self.gradeForm.score < 0 || self.gradeForm.score > 100) {
+                    ElMessage.warning('评分应在 0-100 之间'); return;
+                }
+                self.gradeLoading = true;
+                API.homework.gradeSubmission(self.gradeForm.id, {
+                    score: self.gradeForm.score,
+                    comment: self.gradeForm.comment || null
+                }).then(function(res) {
+                    self.gradeLoading = false;
+                    if (res.code === 200) {
+                        ElMessage.success('批改成功');
+                        self.gradeVisible = false;
+                        self.loadSubmissions();
+                        // 刷新进度
+                        self.loadHomeworkListSilent();
+                    } else {
+                        ElMessage.error(res.message);
+                    }
+                });
+            },
+            loadHomeworkListSilent: function() {
+                if (!this.classId) return;
+                var self = this;
+                API.homework.list({ classId: self.classId, page: 1, pageSize: 100 }).then(function(res) {
+                    if (res.code === 200) self.homeworkList = res.data.list;
+                });
+            }
+        },
+        mounted: function() {
+            var user = getCurrentUser();
+            this.username = user ? user.realName : '管理员';
+            this.loadClasses();
+        }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+})();
+</script>
+</body>
+</html>
