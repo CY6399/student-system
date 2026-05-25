@@ -1,1 +1,6 @@
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\Application.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\GlobalExceptionHandler.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\Result.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\WebConfig.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\UserContext.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\AuthInterceptor.java

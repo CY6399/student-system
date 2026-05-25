@@ -1,1 +1,6 @@
+com\edu\common\WebConfig.class
 com\edu\Application.class
+com\edu\common\GlobalExceptionHandler.class
+com\edu\common\AuthInterceptor.class
+com\edu\common\Result.class
+com\edu\common\UserContext.class
