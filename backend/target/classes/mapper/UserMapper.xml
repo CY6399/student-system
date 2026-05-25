@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.mapper.UserMapper">
+
+    <!-- 通用结果映射（下划线自动转驼峰已在 application.yml 中全局开启） -->
+    <resultMap id="userMap" type="User">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="real_name" property="realName"/>
+        <result column="status" property="status"/>
+        <result column="login_error_count" property="loginErrorCount"/>
+        <result column="locked_until" property="lockedUntil"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="is_deleted" property="isDeleted"/>
+    </resultMap>
+
+    <!-- 根据用户名查询用户（排除逻辑删除的记录） -->
+    <select id="findByUsername" resultMap="userMap">
+        SELECT id, username, password, real_name, status,
+               login_error_count, locked_until, create_time, update_time, is_deleted
+        FROM user
+        WHERE username = #{username}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 根据 ID 查询用户 -->
+    <select id="findById" resultMap="userMap">
+        SELECT id, username, password, real_name, status,
+               login_error_count, locked_until, create_time, update_time, is_deleted
+        FROM user
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 更新登录失败次数和锁定截止时间 -->
+    <update id="updateLoginError">
+        UPDATE user
+        SET login_error_count = #{loginErrorCount},
+            locked_until      = #{lockedUntil}
+        WHERE id = #{id}
+    </update>
+
+    <!-- 登录成功，重置错误次数和锁定状态 -->
+    <update id="resetLoginError">
+        UPDATE user
+        SET login_error_count = 0,
+            locked_until      = NULL
+        WHERE id = #{id}
+    </update>
+
+</mapper>

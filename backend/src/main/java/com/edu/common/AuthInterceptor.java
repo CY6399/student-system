@@ -1,8 +1,10 @@
 package com.edu.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -16,6 +18,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     /**
      * 请求处理前的拦截逻辑
@@ -39,18 +44,23 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 提取 Token 字符串
+        // 提取并校验 JWT Token
         String token = authHeader.substring(7);
+        try {
+            Claims claims = jwtUtil.parseToken(token);
+            Long userId = claims.get("userId", Long.class);
+            String username = claims.get("username", String.class);
 
-        // TODO: Task 13 替换为 JWT 解析，从 Token 中提取 userId 和 username
-        // 当前为演示阶段，使用固定值，等任务 13 实现 JWT 后完善
-        Long userId = 1L;
-        String username = "admin";
-
-        UserContext.setUserId(userId);
-        UserContext.setUsername(username);
-
-        return true;
+            UserContext.setUserId(userId);
+            UserContext.setUsername(username);
+            return true;
+        } catch (Exception e) {
+            // Token 无效或已过期
+            response.setContentType("application/json;charset=utf-8");
+            response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
+                    Result.error(401, "未登录或会话已过期")));
+            return false;
+        }
     }
 
     /**
