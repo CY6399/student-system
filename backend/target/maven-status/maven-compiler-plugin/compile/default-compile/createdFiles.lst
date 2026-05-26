@@ -1,4 +1,6 @@
 com\edu\common\WebConfig.class
+com\edu\entity\ClassEntity.class
+com\edu\service\ClassService.class
 com\edu\common\GlobalExceptionHandler.class
 com\edu\common\AuthInterceptor.class
 com\edu\entity\User.class
@@ -7,5 +9,7 @@ com\edu\service\UserService.class
 com\edu\common\JwtUtil.class
 com\edu\Application.class
 com\edu\mapper\UserMapper.class
+com\edu\mapper\ClassMapper.class
 com\edu\common\Result.class
 com\edu\common\UserContext.class
+com\edu\controller\ClassController.class
