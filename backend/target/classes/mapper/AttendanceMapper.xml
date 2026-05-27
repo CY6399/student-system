@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.mapper.AttendanceMapper">
+
+    <!-- ========== 通用结果映射 ========== -->
+    <!--
+        考勤列表使用 LEFT JOIN student 表查询，
+        student_id / student_name / student_no 来自 student 表，
+        其余字段来自 attendance 表（无记录时为 null）。
+    -->
+    <resultMap id="attendanceMap" type="Attendance">
+        <id column="id" property="id"/>
+        <result column="student_id" property="studentId"/>
+        <result column="student_name" property="studentName"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="class_id" property="classId"/>
+        <result column="date" property="date"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="is_deleted" property="isDeleted"/>
+    </resultMap>
+
+    <!-- ========== 查询某班级某日期的考勤列表 ========== -->
+    <!--
+        核心设计：使用 LEFT JOIN student 表，一次查出该班级全部学生及其考勤状态。
+        - 已有考勤记录的学生：id / status 有值，正常返回
+        - 尚无考勤记录的学生：id / status 为 null，Service 层自动设为默认出勤（status=1）
+        这样前端拿到数据后，无需额外处理即可直接展示全员绿色标签。
+    -->
+    <select id="findByClassIdAndDate" resultMap="attendanceMap">
+        SELECT s.id       AS student_id,
+               s.name     AS student_name,
+               s.student_no,
+               a.id,
+               a.status,
+               a.class_id,
+               a.date
+        FROM student s
+        LEFT JOIN attendance a
+            ON s.id = a.student_id
+            AND a.date = #{date}
+            AND a.is_deleted = 0
+        WHERE s.class_id = #{classId}
+          AND s.is_deleted = 0
+        ORDER BY s.id
+    </select>
+
+    <!-- ========== 根据 ID 查询考勤记录 ========== -->
+    <select id="findById" resultMap="attendanceMap">
+        SELECT id, student_id, class_id, date, status,
+               create_time, update_time, is_deleted
+        FROM attendance
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </select>
+
+    <!-- ========== 批量保存考勤记录 ========== -->
+    <!--
+        使用 MySQL INSERT INTO ... ON DUPLICATE KEY UPDATE 语法：
+        - 唯一约束 uk_student_date (student_id, date) 触发时执行 UPDATE
+        - 无记录时 INSERT，有记录时仅更新 status 字段
+        - 保证幂等：老师重复点击保存或修改状态后重新保存，不会报错
+    -->
+    <insert id="batchInsertOrUpdate">
+        INSERT INTO attendance (student_id, class_id, date, status)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.studentId}, #{item.classId}, #{item.date}, #{item.status})
+        </foreach>
+        ON DUPLICATE KEY UPDATE status = VALUES(status)
+    </insert>
+
+    <!-- ========== 单条修改考勤状态 ========== -->
+    <update id="updateById">
+        UPDATE attendance
+        SET status = #{status}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- ========== 统计某班级在册学生总数 ========== -->
+    <!-- 用于 stats 接口计算应到人数（totalCount） -->
+    <select id="countStudentsByClassId" resultType="long">
+        SELECT COUNT(*)
+        FROM student
+        WHERE class_id = #{classId}
+          AND is_deleted = 0
+    </select>
+
+</mapper>

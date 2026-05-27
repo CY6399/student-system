@@ -2,10 +2,13 @@ com\edu\entity\ClassEntity.class
 com\edu\common\AuthInterceptor.class
 com\edu\mapper\ScheduleMapper.class
 com\edu\service\UserService.class
+com\edu\service\AttendanceService.class
 com\edu\mapper\UserMapper.class
 com\edu\common\Result.class
 com\edu\common\WebConfig.class
+com\edu\controller\AttendanceController.class
 com\edu\service\ScheduleService.class
+com\edu\mapper\AttendanceMapper.class
 com\edu\service\ClassService.class
 com\edu\common\GlobalExceptionHandler.class
 com\edu\mapper\StudentMapper.class
@@ -16,6 +19,7 @@ com\edu\common\JwtUtil.class
 com\edu\controller\ScheduleController.class
 com\edu\Application.class
 com\edu\entity\Student.class
+com\edu\entity\Attendance.class
 com\edu\service\StudentService.class
 com\edu\mapper\ClassMapper.class
 com\edu\common\UserContext.class
