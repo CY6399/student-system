@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.mapper.ScheduleMapper">
+
+    <!-- ========== 通用结果映射 ========== -->
+    <resultMap id="scheduleMap" type="Schedule">
+        <id column="id" property="id"/>
+        <result column="class_id" property="classId"/>
+        <!-- className 来自 LEFT JOIN class 表，非 schedule 表字段 -->
+        <result column="class_name" property="className"/>
+        <result column="course_name" property="courseName"/>
+        <result column="teacher_name" property="teacherName"/>
+        <result column="day_of_week" property="dayOfWeek"/>
+        <result column="time_slot" property="timeSlot"/>
+        <result column="classroom" property="classroom"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="is_deleted" property="isDeleted"/>
+    </resultMap>
+
+    <!-- ========== 新增排课 ========== -->
+    <!-- 唯一约束 uk_class_day_slot (class_id, day_of_week, time_slot) 在 DB 层兜底保证不冲突 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO schedule (class_id, course_name, teacher_name, day_of_week, time_slot, classroom)
+        VALUES (#{classId}, #{courseName}, #{teacherName}, #{dayOfWeek}, #{timeSlot}, #{classroom})
+    </insert>
+
+    <!-- ========== 根据 ID 查询排课 ========== -->
+    <!-- 编辑回显和二次校验时使用 -->
+    <select id="findById" resultMap="scheduleMap">
+        SELECT s.id, s.class_id, c.class_name,
+               s.course_name, s.teacher_name,
+               s.day_of_week, s.time_slot, s.classroom,
+               s.create_time, s.update_time, s.is_deleted
+        FROM schedule s
+        LEFT JOIN `class` c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.id = #{id}
+          AND s.is_deleted = 0
+    </select>
+
+    <!-- ========== 根据班级 ID 查询全部排课 ========== -->
+    <!-- 按 day_of_week 和 time_slot 升序排列，便于前端按周课表展示 -->
+    <select id="findByClassId" resultMap="scheduleMap">
+        SELECT s.id, s.class_id, c.class_name,
+               s.course_name, s.teacher_name,
+               s.day_of_week, s.time_slot, s.classroom,
+               s.create_time, s.update_time, s.is_deleted
+        FROM schedule s
+        LEFT JOIN `class` c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.class_id = #{classId}
+          AND s.is_deleted = 0
+        ORDER BY s.day_of_week, s.time_slot
+    </select>
+
+    <!-- ========== 排课冲突校验 ========== -->
+    <!--
+        校验同一个班级、同一天（day_of_week）、同一时间段（time_slot）是否已有课程。
+        excludeId 用于编辑场景：当修改课程名称或教室时，排除自身记录避免误判为冲突。
+        新增时 excludeId 传 null，此条件不生效。
+    -->
+    <select id="countByClassDaySlot" resultType="int">
+        SELECT COUNT(*)
+        FROM schedule
+        WHERE class_id = #{classId}
+          AND day_of_week = #{dayOfWeek}
+          AND time_slot = #{timeSlot}
+          AND is_deleted = 0
+        <if test="excludeId != null">
+            AND id != #{excludeId}
+        </if>
+    </select>
+
+    <!-- ========== 更新排课信息 ========== -->
+    <!-- 支持修改课程名称、老师、教室、时间段；时间段变更后的冲突由 Service 层前置校验 -->
+    <update id="update">
+        UPDATE schedule
+        SET course_name  = #{courseName},
+            teacher_name = #{teacherName},
+            day_of_week  = #{dayOfWeek},
+            time_slot    = #{timeSlot},
+            classroom    = #{classroom}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- ========== 逻辑删除排课 ========== -->
+    <update id="deleteById">
+        UPDATE schedule
+        SET is_deleted = 1
+        WHERE id = #{id}
+    </update>
+
+</mapper>
