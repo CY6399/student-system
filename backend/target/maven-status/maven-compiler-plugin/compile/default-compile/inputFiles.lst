@@ -1,5 +1,6 @@
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\UserMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\StudentService.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\ScoreService.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\GlobalExceptionHandler.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\AttendanceMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\ScheduleController.java
@@ -10,13 +11,16 @@ D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\JwtUtil.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\Student.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\StudentController.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\ScoreMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\Attendance.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\Application.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\ScoreController.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\ClassService.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\ScheduleService.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\Result.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\ClassController.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\UserContext.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\Score.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\ClassMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\ScheduleMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\ClassEntity.java

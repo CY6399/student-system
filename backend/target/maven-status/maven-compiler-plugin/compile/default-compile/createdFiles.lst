@@ -1,5 +1,7 @@
 com\edu\entity\ClassEntity.class
+com\edu\mapper\ScoreMapper.class
 com\edu\common\AuthInterceptor.class
+com\edu\controller\ScoreController.class
 com\edu\mapper\ScheduleMapper.class
 com\edu\service\UserService.class
 com\edu\service\AttendanceService.class
@@ -11,6 +13,7 @@ com\edu\service\ScheduleService.class
 com\edu\mapper\AttendanceMapper.class
 com\edu\service\ClassService.class
 com\edu\common\GlobalExceptionHandler.class
+com\edu\entity\Score.class
 com\edu\mapper\StudentMapper.class
 com\edu\controller\StudentController.class
 com\edu\entity\User.class
@@ -18,6 +21,7 @@ com\edu\controller\LoginController.class
 com\edu\common\JwtUtil.class
 com\edu\controller\ScheduleController.class
 com\edu\Application.class
+com\edu\service\ScoreService.class
 com\edu\entity\Student.class
 com\edu\entity\Attendance.class
 com\edu\service\StudentService.class

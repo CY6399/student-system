@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.mapper.ScoreMapper">
+
+    <!-- ========== 通用结果映射 ========== -->
+    <resultMap id="scoreMap" type="Score">
+        <id column="id" property="id"/>
+        <result column="student_id" property="studentId"/>
+        <result column="student_name" property="studentName"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="subject" property="subject"/>
+        <result column="score" property="score"/>
+        <result column="exam_date" property="examDate"/>
+        <result column="exam_type" property="examType"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="is_deleted" property="isDeleted"/>
+    </resultMap>
+
+    <!-- ========== 新增成绩 ========== -->
+    <!-- 唯一约束 uk_student_subject_date_type 在 DB 层兜底防止重复录入 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO score (student_id, subject, score, exam_date, exam_type, remark)
+        VALUES (#{studentId}, #{subject}, #{score}, #{examDate}, #{examType}, #{remark})
+    </insert>
+
+    <!-- ========== 根据 ID 查询成绩 ========== -->
+    <select id="findById" resultMap="scoreMap">
+        SELECT sc.id, sc.student_id, s.name AS student_name, s.student_no,
+               sc.subject, sc.score, sc.exam_date, sc.exam_type, sc.remark,
+               sc.create_time, sc.update_time, sc.is_deleted
+        FROM score sc
+        LEFT JOIN student s ON sc.student_id = s.id AND s.is_deleted = 0
+        WHERE sc.id = #{id}
+          AND sc.is_deleted = 0
+    </select>
+
+    <!-- ========== 按班级 + 科目 + 考试日期 + 类型 查询成绩 ========== -->
+    <!--
+        score 表不含 class_id，需通过 student 表关联到班级。
+        按学生 ID 升序排列，保证每次查询顺序一致。
+    -->
+    <select id="findByClassAndExam" resultMap="scoreMap">
+        SELECT sc.id, sc.student_id, s.name AS student_name, s.student_no,
+               sc.subject, sc.score, sc.exam_date, sc.exam_type, sc.remark,
+               sc.create_time, sc.update_time, sc.is_deleted
+        FROM score sc
+        LEFT JOIN student s ON sc.student_id = s.id AND s.is_deleted = 0
+        WHERE s.class_id = #{classId}
+          AND sc.subject = #{subject}
+          AND sc.exam_date = #{examDate}
+          AND sc.exam_type = #{examType}
+          AND sc.is_deleted = 0
+        ORDER BY s.id
+    </select>
+
+    <!-- ========== 按学生分页查询成绩 ========== -->
+    <!-- 查询该学生的所有科目成绩记录，按考试日期倒序排列 -->
+    <select id="findByStudentId" resultMap="scoreMap">
+        SELECT sc.id, sc.student_id, s.name AS student_name, s.student_no,
+               sc.subject, sc.score, sc.exam_date, sc.exam_type, sc.remark,
+               sc.create_time, sc.update_time, sc.is_deleted
+        FROM score sc
+        LEFT JOIN student s ON sc.student_id = s.id AND s.is_deleted = 0
+        WHERE sc.student_id = #{studentId}
+          AND sc.is_deleted = 0
+        ORDER BY sc.exam_date DESC, sc.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- ========== 按学生统计成绩总数 ========== -->
+    <select id="countByStudentId" resultType="long">
+        SELECT COUNT(*)
+        FROM score
+        WHERE student_id = #{studentId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- ========== 根据唯一键查询（防重复校验） ========== -->
+    <!--
+        查 student_id + subject + exam_date + exam_type 的组合是否已存在。
+        仅查 id 即可判断是否有记录，减少数据传输。
+    -->
+    <select id="findByUniqueKey" resultType="com.edu.entity.Score">
+        SELECT id, student_id, subject, score, exam_date, exam_type
+        FROM score
+        WHERE student_id = #{studentId}
+          AND subject = #{subject}
+          AND exam_date = #{examDate}
+          AND exam_type = #{examType}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- ========== 更新成绩 ========== -->
+    <!-- 支持修改分数、备注；考试信息（科目、日期、类型）不允许修改，防止破坏唯一约束 -->
+    <update id="update">
+        UPDATE score
+        SET score  = #{score},
+            remark = #{remark}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- ========== 逻辑删除成绩 ========== -->
+    <update id="deleteById">
+        UPDATE score
+        SET is_deleted = 1
+        WHERE id = #{id}
+    </update>
+
+</mapper>
