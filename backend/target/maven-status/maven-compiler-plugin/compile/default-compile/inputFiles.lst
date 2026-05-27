@@ -1,4 +1,5 @@
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\UserMapper.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\StudentService.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\Application.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\GlobalExceptionHandler.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service\ClassService.java
@@ -9,7 +10,10 @@ D:\AI_projects\education-management-system\backend\src\main\java\com\edu\service
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\UserContext.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\AuthInterceptor.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\ClassMapper.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\mapper\StudentMapper.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\JwtUtil.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\ClassEntity.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\entity\Student.java
+D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\StudentController.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\controller\LoginController.java
 D:\AI_projects\education-management-system\backend\src\main\java\com\edu\common\WebConfig.java

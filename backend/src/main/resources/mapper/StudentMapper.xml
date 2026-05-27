@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.edu.mapper.StudentMapper">
+
+    <!-- ========== 通用结果映射 ========== -->
+    <!--
+        由于 application.yml 已开启下划线自动转驼峰（map-underscore-to-camel-case: true），
+        此处只需显式映射非标准字段即可。
+        但为了可读性和明确性，仍然列出全部字段映射。
+    -->
+    <resultMap id="studentMap" type="Student">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="gender" property="gender"/>
+        <result column="phone" property="phone"/>
+        <result column="class_id" property="classId"/>
+        <!-- className 来自 LEFT JOIN class 表，非 student 表字段 -->
+        <result column="class_name" property="className"/>
+        <result column="enrollment_date" property="enrollmentDate"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="is_deleted" property="isDeleted"/>
+    </resultMap>
+
+    <!-- ========== 新增学生 ========== -->
+    <!-- 学号 student_no 由 UNIQUE KEY 保证唯一性，DB 层拦截重复 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO student (name, student_no, gender, phone, class_id, enrollment_date)
+        VALUES (#{name}, #{studentNo}, #{gender}, #{phone}, #{classId}, #{enrollmentDate})
+    </insert>
+
+    <!-- ========== 根据 ID 查询学生 ========== -->
+    <!-- 单条查询，用于校验和回显 -->
+    <select id="findById" resultMap="studentMap">
+        SELECT s.id, s.name, s.student_no, s.gender, s.phone,
+               s.class_id, c.class_name,
+               s.enrollment_date, s.create_time, s.update_time, s.is_deleted
+        FROM student s
+        LEFT JOIN `class` c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.id = #{id}
+          AND s.is_deleted = 0
+    </select>
+
+    <!-- ========== 分页查询学生列表 ========== -->
+    <!--
+        支持的条件筛选：
+        - name：按学生姓名模糊搜索（LIKE %keyword%）
+        - classId：按班级 ID 精确筛选
+        使用 LEFT JOIN class 表获取班级名称（className）
+    -->
+    <select id="findByPage" resultMap="studentMap">
+        SELECT s.id, s.name, s.student_no, s.gender, s.phone,
+               s.class_id, c.class_name,
+               s.enrollment_date, s.create_time, s.update_time, s.is_deleted
+        FROM student s
+        LEFT JOIN `class` c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.is_deleted = 0
+        <if test="name != null and name != ''">
+            AND s.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="classId != null">
+            AND s.class_id = #{classId}
+        </if>
+        ORDER BY s.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- ========== 查询学生总数 ========== -->
+    <!-- 与 findByPage 使用完全相同的 WHERE 条件，确保分页总数一致 -->
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM student s
+        WHERE s.is_deleted = 0
+        <if test="name != null and name != ''">
+            AND s.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="classId != null">
+            AND s.class_id = #{classId}
+        </if>
+    </select>
+
+    <!-- ========== 根据学号查询（校验唯一性） ========== -->
+    <!-- 新增或更新时调用，判断学号是否已被占用 -->
+    <select id="findByStudentNo" resultMap="studentMap">
+        SELECT s.id, s.name, s.student_no, s.gender, s.phone,
+               s.class_id, c.class_name,
+               s.enrollment_date, s.create_time, s.update_time, s.is_deleted
+        FROM student s
+        LEFT JOIN `class` c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.student_no = #{studentNo}
+          AND s.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- ========== 更新学生信息 ========== -->
+    <!--
+        包含 student_no 字段，支持编辑时修改学号。
+        学号唯一性校验由 Service 层在调用前完成，DB 层通过 UNIQUE KEY 兜底拦截。
+    -->
+    <update id="update">
+        UPDATE student
+        SET name            = #{name},
+            student_no      = #{studentNo},
+            gender          = #{gender},
+            phone           = #{phone},
+            class_id        = #{classId},
+            enrollment_date = #{enrollmentDate}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- ========== 逻辑删除学生 ========== -->
+    <!-- 将 is_deleted 置为 1，保留数据完整 -->
+    <update id="deleteById">
+        UPDATE student
+        SET is_deleted = 1
+        WHERE id = #{id}
+    </update>
+
+</mapper>
